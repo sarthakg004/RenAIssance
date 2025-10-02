@@ -954,8 +954,8 @@ def copy_all_transcripts():
     """
     Copy all transcript files from book folders to destination with Book_{book_number}_{page_number} naming.
     """
-    source_base = "data/GAN-DATA/2_splitted/transcripts"
-    dest_folder = "data/GAN-DATA/3_processed/transcripts"
+    source_base = "data/2_splitted/transcripts"
+    dest_folder = "data/3_processed/transcripts"
     
     # Create destination folder if it doesn't exist
     os.makedirs(dest_folder, exist_ok=True)
@@ -1022,8 +1022,8 @@ def copy_all_transcripts():
 def copy_all_images():
     import gc
     
-    source_base = "data/GAN-DATA/2_splitted/books"
-    dest_folder = "data/GAN-DATA/2_splitted/images"
+    source_base = "data/2_splitted/books"
+    dest_folder = "data/2_splitted/images"
     
     os.makedirs(dest_folder, exist_ok=True)
     base_path = Path(source_base)
@@ -1201,7 +1201,7 @@ def plot_random_pages(images_dir="data/3_processed/books",
 #################################################################################################################################
                                         # Mapping Bounding Boxes to Transcript
 #################################################################################################################################
-pytesseract.pytesseract.tesseract_cmd = r".\models\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 def similarity_score(a, b):
     """Calculate string similarity between two strings"""

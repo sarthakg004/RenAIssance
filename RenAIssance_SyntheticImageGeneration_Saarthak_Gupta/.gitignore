@@ -8,4 +8,10 @@ data
 models
 proposal.pdf
 output
+synthetic_generated_pages
 CRAFT-pytorch
+OCR_data_synthetic
+OCR_data_original
+EasyOCR
+synthetic_finetune_data
+output_craft_finetune

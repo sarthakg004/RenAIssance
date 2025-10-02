@@ -1,0 +1,11 @@
+torch 
+pillow
+numpy
+pandas
+matplotlib
+opencv-python
+scikit-image
+tqdm
+python-docx
+pymupdf
+pytesseract

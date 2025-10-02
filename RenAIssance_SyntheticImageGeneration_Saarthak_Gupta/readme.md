@@ -1,199 +1,222 @@
 # Synthetic text generation with Generative Models
 
-For Historical Manuscripts, limited availability of data a limiting factor in training OCR or Layout Detection models. This project propose a solution to this bottleneck by using a GAN architecture to generate synthetic renaissance style Image Data which can be used to improve OCR model performance on historical Spanish texts.This project is part of the HumanAI Foundation initiative and was developed during Google Summer of Code 2025.
+For Historical Manuscripts, limited availability of data a limiting factor in training OCR or Layout Detection models. This project propose a solution to this bottleneck by using a GAN architecture to generate synthetic renaissance style Image Data which can be used to improve OCR model performance on historical Spanish texts. This project is part of the HumanAI Foundation initiative and was developed during Google Summer of Code 2025.
 
 ## Table of Contents
 
-- [Overview](#overview)  
-- [Project Structure](#project-structure)  
-- [Requirements](#Requirements)  
-- [Data Generation Pipeline](#data-generation-pipeline)  
-  - Splitting Pages  
-  - Image Preprocessing  
-  - Text Detection  
-  - Aligning Detection with Transcript  
-  - Dataset Creation  
-  - Grid Construction  
-- [Model Building & Training](#model-building--training)  
-  - Generator & Discriminator  
-  - Training Loop  
-- [Inference & Synthetic Page Generation](#inference--synthetic-page-generation)  
-- [Usage](#usage)  
-
+- Overview  
+- Project Structure  
+- First-time Setup (Windows)  
+- Data and Weights  
+- Data Generation Pipeline  
+- Model Building & Training  
+- Inference & Synthetic Page Generation  
+- Using the Notebooks  
 ---
 
 ## Overview
 
 Historical OCR is challenged by scarce data and variable degradation in old manuscripts. This project:
 
-1. Builds a **data‑generation pipeline** to split, enhance, detect, and align word images from scanned PDFs and transcripts.
-2. Implements a **Pix2Pix‑style GAN** (U‑Net generator + PatchGAN discriminator) to translate clean synthetic text into realistic Renaissance‑era handwriting.
-3. Provides a **procedural synthetic page generator** that simulates paper aging, ink bleed, and layout irregularities.
+1. Builds a data‑generation pipeline to split, enhance, detect, and align word images from scanned PDFs and transcripts.
+2. Implements a Pix2Pix‑style WGAN (U‑Net generator + PatchGAN Critic) to translate clean synthetic text into realistic Renaissance‑era handwriting.
+3. Provides a procedural synthetic page generator that simulates paper aging, ink bleed, and layout irregularities.
+4. Build an CNN-biLSTM OCR model using the synthetic data and finetune on original data.
+5. Used the synthetic data to finetune CRAFT text detection model.
 
 ---
 
 ## Project Structure
 
 ```
+RenAIssance_SyntheticImageGeneration_Saarthak_Gupta/
+├─ experimentation.ipynb            # End-to-end data → model → inference walkthrough
+├─ OCR.ipynb                        # OCR baseline/evaluation workflow (CRAFT + OCR)
+├─ finetune-craft-custom.ipynb      # Fine-tune CRAFT text detector
+├─ CRAFT-pytorch/                   # CRAFT detector code and weights
+│  └─ weights/
+├─ fonts/                           # Historical-style fonts (e.g., RomanAntique.ttf)
+├─ models/                          # Pretrained weights (e.g., RealESRGAN_x4plus.pth)
+├─ data/                            # You will place your books and transcripts here
+│  └─ 1_raw/
+│     ├─ books/                     # Input PDFs
+│     └─ transcripts/               # Input DOCX transcripts
+├─ src/
+│  ├─ data_generation.py            # End-to-end data pipeline (hard-coded default paths)
+│  ├─ data_utils.py                 # Splitting, preprocessing, detection, mapping, dataset building
+│  ├─ model_utils.py                # GAN models, train loop, visualization, inference pipeline
+│  └─ model.py                      # Training + inference pipeline runner
+└─ assets/                          # Figures used in this README
+```
 
-.
-├── experimentation.ipynb       # Jupyter notebook demonstrating end-to-end pipeline
-├── data/                       # (not committed) raw PDFs and transcripts
-├── outputs/                    # generated datasets, models, and figures
-└── src/                        # core modules (imported in the notebook)
-├── data_utils.py          # data-splitting, preprocessing, detection, mapping, dataset creation
-└── model_utils.py         # GAN model classes and training/inference helpers
-
-````
+Notes on paths:
+- This README and notebooks use a direct `data/...` layout (e.g., `data/1_raw/...`). Some scripts (e.g., `src/data_generation.py`, `src/model.py`) 
 
 ---
 
-## Requirements
+## First-time Setup (Windows)
 
-- Python 3.8+  
-- [PyTorch](https://pytorch.org/)  
-- torchvision  
-- Pillow  
-- numpy, pandas, matplotlib  
-- CRAFT text‑detection model weights (download per instructions in `src/data_utils.py`)  
+Prerequisites:
+- Python 3.8+ (3.10 recommended)
+- Git
+- GPU optional (CUDA speeds training but is not required)
 
-Downlaod the data and required model files from : [LINK](https://iitbhu365-my.sharepoint.com/:f:/g/personal/saarthak_gupta_mec22_iitbhu365_onmicrosoft_com/EtFan2TQidhNhTXXK45qTGwBAvyxOfpaJNxhSPWy16N0EA?e=fbdyuR)
+1) Create and activate a virtual environment
 
-Install with:
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+```
 
-```bash
-pip install torch torchvision pillow numpy pandas matplotlib
-````
+2) Install core dependencies
+
+```bat
+pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu121
+pip install pillow numpy pandas matplotlib opencv-python scikit-image tqdm python-docx pymupdf basicsr realesrgan pytesseract
+```
+or 
+```
+pip install -r requirements
+```
+
+3) Install Tesseract OCR (required for mapping words)
+- Download and install Tesseract for Windows (default path: `C:\Program Files\Tesseract-OCR\tesseract.exe`).
+- The code already points to this path in `src/data_utils.py`. If you installed elsewhere, update the line:
+  `pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"`.
+
+
+---
+
+## Data and Weights
+
+- Download data and required model files (PDFs, transcripts, optional prepared outputs) from:   [Share Link](https://iitbhu365-my.sharepoint.com/:f:/g/personal/saarthak_gupta_mec22_iitbhu365_onmicrosoft_com/Eg2oNtFNhwVInbgs-FOrrHoBomkr7nfbY9VYHgx8eWjPcQ?e=qmazE5)
+
+Place all the downloaded directory in your working repository.
+
+### Required folders to download from Google Drive
+
+Download the following folders from the shared drive and place them directly inside `RenAIssance_SyntheticImageGeneration_Saarthak_Gupta/`:
+
+1) `data/`
+  - Contains the pipeline structure used by `src/data_generation.py` and the notebooks.
+  - Expected subfolders after running the pipeline: `2_splitted`, `3_processed`, `4_bounding_boxes`, `5_mapped`, `6_word_data`, `final_dataset`, `grid_dataset`.
+
+2) `OCR_data_original/`
+  - Original OCR pages and related artifacts used by `OCR.ipynb` for baseline comparisons.
+  - Example: `OCR_data_original/1_raw/...`
+
+3) `OCR_data_synthetic/`
+  - Synthetic OCR data produced by the pipeline/notebooks for model training and evaluation.
+  - Example: `OCR_data_synthetic/3_preprocessed/...`
+
+4) `synthetic_finetune_data/`
+  - Data (bboxes/pages/transcripts) to fine‑tune CRAFT in `finetune-craft-custom.ipynb`.
+  - Example: `synthetic_finetune_data/{bboxes,pages,transcripts}/...`
+
+Resulting layout (partial):
+```
+RenAIssance_SyntheticImageGeneration_Saarthak_Gupta/
+├─ data/
+├─ OCR_data_original/
+├─ OCR_data_synthetic/
+└─ synthetic_finetune_data/
+```
 
 ---
 
 ## Data Generation Pipeline
 
-All functions below are implemented in **`src/data_utils.py`** and demonstrated in the notebook.
+All functions below are implemented in `src/data_utils.py` and orchestrated by `src/data_generation.py`.
 
-### 1. Splitting Pages
+### 1) Splitting Pages
 
-* **`copy_all_images(csv_file)`** / **`copy_all_transcripts(csv_file)`**
-  Splits multi‑page PDFs into per‑page images and aligns each with its transcript.
+- `process_books_with_transcripts(...)` splits multi‑page PDFs into per‑page images and produces per‑page transcripts.
+- `copy_all_images()` and `copy_all_transcripts()` normalize naming to `Book_{book}_{page}.ext`.
 
-  ![alt text](assets/image2.png)
+![alt text](assets/image2.png)
 
-### 2. Image Preprocessing
+### 2) Image Preprocessing
 
-* **`analyze_image_sizes(...)`**, **`resize_and_pad(...)`**
-* **`extract_and_process_all_regions(...)`**
-  Skew correction, DPI adjustment, denoising, binarization, morphological operations.
+- `correct_skew`, `ensure_300ppi`, `remove_bleed_dual_layer`, `denoise_image`, `sharpen_image`, `enhance_contrast`, `binarize_image`, `morphological_operations`, `upscale`  
+- `process_multiple_books(...)` applies a configurable sequence per book.
 
-  ![alt text](assets/preprocessing.png)
+![alt text](assets/preprocessing.png)
 
-### 3. Text Detection
+### 3) Text Detection
 
-* **`text_detection(image_path, craft_model)`**
-  Uses CRAFT to find word‑level bounding boxes on each page.
-  ![alt text](assets/plots/plot7.png)
-### 4. Aligning Detection with Transcript
+- `text_detection(input_root, output_root, model_path)` runs CRAFT to find word‑level bounding boxes and writes `.txt` files.
 
-* **`mapping_bounding_boxes(...)`**
-  Fine‑tuned PyTesseract + string similarity (threshold 0.8) to match each box to its correct transcript word.
-  ![alt text](assets/mapping.png)
+![alt text](assets/plots/plot7.png)
 
-### 5. Dataset Creation
+### 4) Aligning Detection with Transcript
 
-* **`generate_text_image_dataset(...)`**
-  Renders each matched word in RomanAntique font (64×128), stacks 8 word images into a 256×256 grid, cleans and saves \~4,800 paired samples.
+- `mapping_bounding_boxes(...)` uses PyTesseract + string similarity to align bounding boxes to words (threshold configurable).
 
-### 6. Grid Construction
+![alt text](assets/mapping.png)
 
-* **`plot_bounding_boxes(...)`**, **`create_grid_from_words(...)`**
-  Utility functions to visualize detections and composite word grids for GAN input.
+### 5) Dataset Creation
+
+- `extract_and_process_all_regions(...)` crops word images and creates `words.csv`.
+- `resize_and_pad(...)` standardizes word image size (default 64×128).
+- `generate_text_image_dataset(...)` renders source font images to pair with targets and writes `data.csv`.
 
 ![alt text](assets/final_data.png)
+
+### 6) Grid Construction
+
+- `create_image_grids(...)` builds N×M grids (e.g., 4×2) for Pix2Pix training and saves `grid_info.csv`.
 
 ---
 
 ## Model Building & Training
 
-All model definitions and training helpers live in **`src/model_utils.py`**.
+All model definitions and training helpers live in `src/model_utils.py`.
 
-### Generator & Discriminator
+Generator & Discriminator:
+- `UNetGenerator` — U‑Net with skip connections for image‑to‑image translation.
+- `PatchDiscriminator` — 70×70 PatchGAN for local realism.
 
-* **`class UNetGenerator(nn.Module)`**
-  U‑Net with encoder/decoder and skip connections for image‑to‑image translation.
-* **`class PatchDiscriminator(nn.Module)`**
-  70×70 PatchGAN discriminator for local realism.
+![alt text](assets/model.png)
 
- ![alt text](assets/model.png)
-### Training Loop
-
-* **`def train_pix2pix(csv_file, epochs=100, batch_size=32, lr=2e-4, save_dir="models")`**
-
-  * **Generator loss:** BCE GAN loss + 100× L1 loss
-  * **Discriminator loss:** 0.5 × (Loss\_real + Loss\_fake)
-* **`def plot_gan_history(csv_path)`**, **`def visualize_pix2pix_results(...)`**
-  Scripts to track losses and sample outputs.
+Training loop:
+- `train_pix2pix(csv_file, epochs=100, batch_size=32, lr=2e-4, save_dir="...")`
+  - Generator loss = GAN (BCE) + 100× L1
+  - Discriminator loss = 0.5 × (real + fake)
+- `plot_gan_history(csv_path)` and `visualize_pix2pix_results(...)` for monitoring and samples.
 
 ![alt text](assets/training_history_history.png)
+
 ---
 
 ## Inference & Synthetic Page Generation
 
-* **`class GANInferencePipeline:`**
-
-  * `load_generator(generator_path)`
-  * `visualize_pix2pix_results(...)`
-* **`class SyntheticPageGenerator:`**
-
-  * `render_single_word(word) → Image`
-  * `create_grid_from_words(words) → Image`
-  * `preprocess_image(...)`, `postprocess_output(...)`
+- `GANInferencePipeline` supports:
+  - `render_single_word`, `create_grid_from_words`
+  - `generate_handwriting(words)` → grid input + generated handwriting
+  - `save_results(...)` to persist images
 
 ![alt text](assets/test_samples.png)
-These classes let you generate new word samples and full synthetic pages.
+
+Use it to generate new word samples and full synthetic pages.
 
 ![alt text](assets/pages.png)
 
 ---
 
-## Usage
+## Using the Notebooks
 
-1. **Prepare data**
-   Place your PDFs and transcripts under `data/raw/`, then run the “Data Generation” cells in `experimentation.ipynb`.
+Recommended order for a first run:
 
-2. **Generate training set**
-   Execute the notebook cells up through `generate_text_image_dataset(...)`.
+1) `SyntheticDataGeneration.ipynb` (end-to-end)
+  - Update any paths in the first few cells if your data differs from `data/...` or if you are using a custom layout.
+   - Run through data splitting → preprocessing → detection → mapping → dataset → grid → training → inference.
+   - The following notebook generate data to train the WGAN model from the available PDF and also contain the code to generate synthetic page images using algorithmic degradation.
 
-3. **Train GAN**
-   In the notebook (or via command line):
+2) `OCR.ipynb`
+   -  OCR experiments and evaluation using CRAFT + OCR over your processed pages(visible improvement in performance when using synthetic data).
 
-   ```python
-   from src.model_utils import train_pix2pix
-   train_pix2pix(
-       csv_file="outputs/dataset/mapping.csv",
-       epochs=100,
-       batch_size=32,
-       lr=2e-4,
-       save_dir="outputs/models"
-   )
-   ```
-
-4. **Visualize results**
-
-   ```python
-   from src.model_utils import visualize_pix2pix_results
-   visualize_pix2pix_results(
-       "outputs/models/generator.pth",
-       dataloader, 
-       num_samples=5
-   )
-   ```
-
-5. **Generate synthetic pages**
-
-   ```python
-   from src.model_utils import SyntheticPageGenerator
-   spg = SyntheticPageGenerator()
-   page_img = spg.create_synthetic_page_from_text("To be, or not to be…")
-   page_img.save("outputs/pages/page1.png")
-   ```
+3) `finetune-craft-custom.ipynb`
+   - Fine‑tune CRAFT on your own annotations. Ensure training/val lists and data roots are set.
 
 ---
